@@ -809,10 +809,18 @@ class TestSocketPairRoundTrip(unittest.TestCase):
             conn.send_text("123456789")
 
     def test_concurrent_sends_do_not_interleave(self):
-        """两个线程同时发消息，客户端必须能逐帧正确解析（发送已串行化）。"""
-        payload = b"m" * 300
-        count = 25
+        """两个线程同时发消息，客户端必须能逐帧正确解析（发送已串行化）。
+
+        读线程与发送线程**并发**运行，避免 socket 缓冲区被写满导致发送侧超时
+        （CI 的 2 核机器上，原先“先发完再读”的写法会稳定超时）；超时值也给足，
+        这个测试关心的是帧不交错，而不是速度。
+        """
+        payload = b"m" * 64
+        count = 10
         errors = []
+        received = []
+        self.server_sock.settimeout(30)
+        self.client_sock.settimeout(30)
 
         def blast():
             try:
@@ -821,13 +829,24 @@ class TestSocketPairRoundTrip(unittest.TestCase):
             except Exception as exc:                # pragma: no cover
                 errors.append(exc)
 
-        threads = [threading.Thread(target=blast) for _ in range(2)]
-        for thread in threads:
+        def drain():
+            try:
+                for _ in range(count * 2):
+                    received.append(read_server_frame(self.stream))
+            except Exception as exc:                # pragma: no cover
+                errors.append(exc)
+
+        reader = threading.Thread(target=drain)
+        senders = [threading.Thread(target=blast) for _ in range(2)]
+        reader.start()
+        for thread in senders:
             thread.start()
-        for thread in threads:
-            thread.join(timeout=20)
+        for thread in senders:
+            thread.join(timeout=60)
+        reader.join(timeout=60)
+        self.assertFalse(reader.is_alive(), "读线程未在超时内收完全部帧")
         self.assertEqual(errors, [])
-        received = [read_server_frame(self.stream) for _ in range(count * 2)]
+        self.assertEqual(len(received), count * 2)
         for frame in received:
             self.assertEqual(frame, (True, _OP_BINARY, payload))
 

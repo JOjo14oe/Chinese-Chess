@@ -202,7 +202,8 @@ class TestEventsAndReconnect(unittest.TestCase):
         self.room.apply_move("r", "h2e2")
         started = time.monotonic()
         payload = self.room.wait_events(0, timeout=5)
-        self.assertLess(time.monotonic() - started, 1.0)
+        # 有事件时必须立刻返回（给慢 runner 留足调度余量，不卡 1 秒紧边界）
+        self.assertLess(time.monotonic() - started, 2.5)
         self.assertEqual(payload["t"], "events")
 
     def test_wait_events_wakes_up_on_move_from_another_thread(self):

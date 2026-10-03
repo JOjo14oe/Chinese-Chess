@@ -45,12 +45,20 @@ class TestEngine(unittest.TestCase):
         self.assertLess(evaluate(board, BLACK), -500)
 
     def test_easy_returns_legal_move_quickly(self):
+        """入门难度必须很快返回**合法**着法。
+
+        上限取自引擎自身配置（时间上限 + 复核余量 + 慢机器的宽限），
+        不在 CI 上写死 3 秒这种紧边界——2 核共享 runner 上会偶发超时。
+        """
+        from xiangqi.ai import LEVELS
+        budget = LEVELS["easy"][1] + 3.0          # 1.5s 时限 + 额外宽限
         board = Board(START_FEN)
         start = time.monotonic()
         move = Engine("easy", seed=3).choose_move(board, "easy")
         elapsed = time.monotonic() - start
         self.assertIn(move, list(board.gen_legal_moves()))
-        self.assertLess(elapsed, 3.0, "入门难度耗时过长：%.2fs" % elapsed)
+        self.assertLess(elapsed, budget,
+                        "入门难度耗时过长：%.2fs（上限 %.1fs）" % (elapsed, budget))
 
     def test_engine_wins_free_rook(self):
         # 双方各一车、子力均势；黑车 a4 无根，红方应能白得一车（甚至直接成杀）

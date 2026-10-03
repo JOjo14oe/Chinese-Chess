@@ -32,7 +32,38 @@ THIRD_PARTY_FORBIDDEN = {
 }
 
 IMPORT_RE = re.compile(r"^\s*(?:from|import)\s+([A-Za-z_][\w.]*)")
-STDLIB = set(getattr(sys, "stdlib_module_names", ()))
+
+
+def stdlib_names():
+    """标准库顶层模块名集合。
+
+    ``sys.stdlib_module_names`` 是 3.10 才有的；为了在 3.9 上也能做这项检查，
+    回退为扫描标准库目录（``sysconfig`` 的 stdlib / platstdlib，Windows 还有 ``DLLs``）。
+    """
+    names = set(getattr(sys, "stdlib_module_names", ()))
+    if names:
+        return names
+    names.update(sys.builtin_module_names)
+    paths = []
+    try:
+        import sysconfig
+        paths.append(sysconfig.get_paths().get("stdlib"))
+        paths.append(sysconfig.get_paths().get("platstdlib"))
+        paths.append(os.path.join(sys.base_prefix, "DLLs"))   # Windows 扩展模块
+    except Exception:  # noqa: BLE001 - 拿不到就退化成“只查第三方黑名单”
+        pass
+    import pkgutil
+    for path in paths:
+        if path and os.path.isdir(path):
+            try:
+                for module in pkgutil.iter_modules([path]):
+                    names.add(module.name)
+            except Exception:  # noqa: BLE001
+                continue
+    return names
+
+
+STDLIB = stdlib_names()
 
 
 def iter_sources(directory, skip_dirs=()):
