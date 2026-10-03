@@ -118,21 +118,24 @@ class TestWebIntegration(unittest.TestCase):
         """
         self.assertIn("innerHeight", self.app, "app.js 未把视口高度纳入棋盘尺寸计算")
         self.assertIn("availableH", self.app, "app.js 缺少高度预算变量")
-        self.assertRegex(self.app,
-                         r"Math\.min\(\s*available\s*/\s*10\s*,\s*\(?\s*availableH\s*\*\s*VIEWPORT_FILL",
+        for name in ("CELL_MIN", "CELL_MAX", "VIEWPORT_FILL", "MARGIN_RATIO", "PIECE_RATIO"):
+            self.assertIn(name, self.app, "缺少棋盘布局常量 %s" % name)
+        self.assertRegex(self.app, r"Math\.min\(\s*available\s*/",
                          "格子大小应取“宽度允许”和“高度允许”的较小值")
-        self.assertRegex(self.app, r"CELL_MAX\s*=\s*\d+",
-                         "缺少单格上限 CELL_MAX（大窗口下棋盘会几乎占满整屏）")
+        self.assertRegex(self.app, r"availableH\s*\*\s*VIEWPORT_FILL",
+                         "高度预算必须参与格子大小计算")
+        self.assertRegex(self.app, r"available\s*/\s*\(?\s*8\s*\+\s*2\s*\*\s*MARGIN_RATIO",
+                         "宽度预算应包含四周木框（8 格棋盘 + 2×木框）")
         self.assertIn("dom.boardShell.style.width", self.app,
                       "木框必须紧贴画布，否则底部会露出一条空白木纹")
 
     def test_board_shell_aspect_matches_canvas(self):
-        """木框的比例必须与画布一致（10 格宽 : 11 格高），否则底部会被 overflow 裁掉。"""
+        """木框的比例必须与画布一致（9 格宽 : 10 格高 = 8×9 格 + 四周各半格木框）。"""
         css = read("style.css")
         shell = re.search(r"\.board-shell\s*\{(.*?)\}", css, re.S)
         self.assertIsNotNone(shell, "style.css 里找不到 .board-shell 规则")
-        self.assertRegex(shell.group(1), r"aspect-ratio:\s*10\s*/\s*11",
-                         ".board-shell 的 aspect-ratio 必须是 10/11（与画布一致）")
+        self.assertRegex(shell.group(1), r"aspect-ratio:\s*9\s*/\s*10",
+                         ".board-shell 的 aspect-ratio 必须是 9/10（与 8+2*0.5 : 9+2*0.5 一致）")
 
 
 class TestWebLogicWithNode(unittest.TestCase):

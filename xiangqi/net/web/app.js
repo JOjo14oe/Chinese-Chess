@@ -257,6 +257,11 @@
   var CELL_MIN = 21;          // 再小棋子上的字就看不清了
   var CELL_MAX = 64;          // 单格最大 CSS 像素
   var VIEWPORT_FILL = 0.92;   // 高度预算里实际只用 92%
+  /* 比例对齐参考图（用户给的棋盘样式图）：
+     木框只有半格宽（原来是整整一格，盘面显得被木框挤小），棋子直径约 0.92 格。
+     于是画布宽 = 8 + 2*0.5 = 9 格，高 = 9 + 2*0.5 = 10 格。 */
+  var MARGIN_RATIO = 0.5;     // 木框宽度（格）
+  var PIECE_RATIO = 0.46;     // 棋子半径（格）
 
   /**
    * 计算并锁定画布尺寸（含 devicePixelRatio），保证高分屏不糊。
@@ -291,17 +296,16 @@
     var availableH = Math.max(10 * CELL_MIN, viewportH
       - Math.max(shellRect.top, 0) - Math.max(hintH, 18) - 26);
 
-    /* 画布尺寸先按“10 格宽”（8 格棋盘 + 左右各一格边距）估算，
-       再用循环严格夹到容器宽度以内：宁可棋盘小半像素，也不能比容器宽，
-       否则浏览器会缩放画布，点击就会偏格（曾经踩过的坑）。
+    /* 画布尺寸 = 棋盘 8×9 格 + 上下左右各半格木框（MARGIN_RATIO）。
        格子大小取“宽度允许”和“高度允许”两者中的较小值，并受 CELL_MIN/CELL_MAX 约束。 */
     var cell = clamp(
-      Math.floor(Math.min(available / 10, (availableH * VIEWPORT_FILL) / 11) * 2) / 2,
+      Math.floor(Math.min(available / (8 + 2 * MARGIN_RATIO),
+                          (availableH * VIEWPORT_FILL) / (9 + 2 * MARGIN_RATIO)) * 2) / 2,
       CELL_MIN, CELL_MAX);
-    var margin = Math.max(26, Math.round(cell));
+    var margin = Math.max(12, Math.round(cell * MARGIN_RATIO));
     while (cell > CELL_MIN && cell * 8 + margin * 2 > available) {
       cell -= 0.5;
-      margin = Math.max(26, Math.round(cell));
+      margin = Math.max(12, Math.round(cell * MARGIN_RATIO));
     }
     var cssW = cell * 8 + margin * 2;
     var cssH = cell * 9 + margin * 2;
@@ -535,7 +539,7 @@
     var ctx = board.ctx;
     var dpr = board.dpr;
     var grid = XQ.parseFenBoard(api.fen);
-    var radius = board.cell * 0.44;
+    var radius = board.cell * PIECE_RATIO;
     var font = 'bold ' + Math.max(13, Math.round(board.cell * 0.55)) + 'px ' + riverFont();
 
     ctx.textAlign = 'center';

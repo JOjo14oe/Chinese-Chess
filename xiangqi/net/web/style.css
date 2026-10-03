@@ -150,7 +150,7 @@ ul { list-style: none; padding: 0; }
   width: 100%;
   max-width: 780px;                 /* 画布最大 10 格 x 78px = 780px，绝不会被容器挤到缩放 */
   margin: 0 auto;
-  aspect-ratio: 10 / 11;            /* = JS 侧画布 10 格宽 × 11 格高：与画布完全一致，避免底部被裁 */
+  aspect-ratio: 9 / 10;             /* = JS 侧画布 9 格宽 × 10 格高（8×9 格棋盘 + 四周各半格木框） */
   background: var(--wood);
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow);
