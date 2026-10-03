@@ -228,9 +228,9 @@
     if (typeof ResizeObserver === 'function') {
       var observer = new ResizeObserver(function () { scheduleLayout(); });
       observer.observe(dom.boardShell);
-    } else {
-      window.addEventListener('resize', scheduleLayout);
     }
+    // 壳子的尺寸只随宽度变化；窗口**高度**变化时也要重算（格子大小现在受视口高度约束）
+    window.addEventListener('resize', scheduleLayout);
     window.addEventListener('orientationchange', function () { setTimeout(scheduleLayout, 120); });
     if (window.matchMedia) {
       var dark = window.matchMedia('(prefers-color-scheme: dark)');
@@ -273,10 +273,19 @@
       setTimeout(scheduleLayout, 200);
       return;
     }
+    /* 高度预算：视口高度 - 棋盘上方已占高度（顶栏/间距）- 下方提示语 - 余量。
+       棋盘是 10 格宽 × 11 格高，只按宽度算的话，1400px 宽的窗口会得到 858px 高的
+       棋盘，笔记本视口（约 700~800px）就得滚动才能看到最下一排（实测踩过）。 */
+    var hintH = dom.boardHint ? dom.boardHint.getBoundingClientRect().height : 18;
+    var viewportH = window.innerHeight || document.documentElement.clientHeight || 720;
+    var availableH = Math.max(10 * 21, viewportH
+      - Math.max(shellRect.top, 0) - Math.max(hintH, 18) - 14);
+
     /* 画布尺寸先按“10 格宽”（8 格棋盘 + 左右各一格边距）估算，
        再用循环严格夹到容器宽度以内：宁可棋盘小半像素，也不能比容器宽，
-       否则浏览器会缩放画布，点击就会偏格（曾经踩过的坑）。 */
-    var cell = clamp(Math.round((available / 10) * 2) / 2, 21, 78);
+       否则浏览器会缩放画布，点击就会偏格（曾经踩过的坑）。
+       格子大小取“宽度允许”和“高度允许”两者中的较小值，保证整盘一屏放得下。 */
+    var cell = clamp(Math.floor(Math.min(available / 10, availableH / 11) * 2) / 2, 21, 78);
     var margin = Math.max(26, Math.round(cell));
     while (cell > 21 && cell * 8 + margin * 2 > available) {
       cell -= 0.5;

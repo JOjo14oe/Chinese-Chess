@@ -109,6 +109,26 @@ class TestWebIntegration(unittest.TestCase):
         for key in ("xq.room", "xq.token", "xq.seq"):
             self.assertIn(key, self.app)
 
+    def test_board_size_respects_viewport_height(self):
+        """棋盘尺寸必须同时受视口**高度**约束。
+
+        棋盘是 10 格宽 × 11 格高（8×9 格 + 上下各一格边距）。只按容器宽度算格子大小的话，
+        宽窗口会算出 858px 高的棋盘，笔记本视口（约 700~800px）就得滚动才能看到最下一排
+        —— 这是实际收到过的反馈，所以在此立个回归守卫。
+        """
+        self.assertIn("innerHeight", self.app, "app.js 未把视口高度纳入棋盘尺寸计算")
+        self.assertIn("availableH", self.app, "app.js 缺少高度预算变量")
+        self.assertRegex(self.app, r"Math\.min\(\s*available\s*/\s*10\s*,\s*availableH\s*/\s*11\s*\)",
+                         "格子大小应取“宽度允许”和“高度允许”的较小值")
+
+    def test_board_shell_aspect_matches_canvas(self):
+        """木框的比例必须与画布一致（10 格宽 : 11 格高），否则底部会被 overflow 裁掉。"""
+        css = read("style.css")
+        shell = re.search(r"\.board-shell\s*\{(.*?)\}", css, re.S)
+        self.assertIsNotNone(shell, "style.css 里找不到 .board-shell 规则")
+        self.assertRegex(shell.group(1), r"aspect-ratio:\s*10\s*/\s*11",
+                         ".board-shell 的 aspect-ratio 必须是 10/11（与画布一致）")
+
 
 class TestWebLogicWithNode(unittest.TestCase):
     """需要 node；缺失时自动跳过（不引入任何 npm 依赖）。"""

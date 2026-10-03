@@ -150,7 +150,7 @@ ul { list-style: none; padding: 0; }
   width: 100%;
   max-width: 780px;                 /* 画布最大 10 格 x 78px = 780px，绝不会被容器挤到缩放 */
   margin: 0 auto;
-  aspect-ratio: 700 / 760;          /* 与 JS 侧 8x9 格 + 等宽边距一致，避免首帧跳动 */
+  aspect-ratio: 10 / 11;            /* = JS 侧画布 10 格宽 × 11 格高：与画布完全一致，避免底部被裁 */
   background: var(--wood);
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow);
