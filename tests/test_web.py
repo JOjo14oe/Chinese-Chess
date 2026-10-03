@@ -118,8 +118,13 @@ class TestWebIntegration(unittest.TestCase):
         """
         self.assertIn("innerHeight", self.app, "app.js 未把视口高度纳入棋盘尺寸计算")
         self.assertIn("availableH", self.app, "app.js 缺少高度预算变量")
-        self.assertRegex(self.app, r"Math\.min\(\s*available\s*/\s*10\s*,\s*availableH\s*/\s*11\s*\)",
+        self.assertRegex(self.app,
+                         r"Math\.min\(\s*available\s*/\s*10\s*,\s*\(?\s*availableH\s*\*\s*VIEWPORT_FILL",
                          "格子大小应取“宽度允许”和“高度允许”的较小值")
+        self.assertRegex(self.app, r"CELL_MAX\s*=\s*\d+",
+                         "缺少单格上限 CELL_MAX（大窗口下棋盘会几乎占满整屏）")
+        self.assertIn("dom.boardShell.style.width", self.app,
+                      "木框必须紧贴画布，否则底部会露出一条空白木纹")
 
     def test_board_shell_aspect_matches_canvas(self):
         """木框的比例必须与画布一致（10 格宽 : 11 格高），否则底部会被 overflow 裁掉。"""

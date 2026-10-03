@@ -251,6 +251,13 @@
     });
   }
 
+  /* 棋盘格子尺寸的上下限与视口占用。
+     CELL_MAX 曾是 78（棋盘 780×858），在大窗口上几乎占满整屏、也容易顶到视口边缘
+     （实际收到的反馈），因此下调到 64，并只使用高度预算的 92% 留出呼吸空间。 */
+  var CELL_MIN = 21;          // 再小棋子上的字就看不清了
+  var CELL_MAX = 64;          // 单格最大 CSS 像素
+  var VIEWPORT_FILL = 0.92;   // 高度预算里实际只用 92%
+
   /**
    * 计算并锁定画布尺寸（含 devicePixelRatio），保证高分屏不糊。
    *
@@ -268,7 +275,10 @@
     if (!canvas || !ctx) return;
 
     var shellRect = dom.boardShell.getBoundingClientRect();
-    var available = shellRect.width;
+    /* 宽度预算取**外层容器**（.board-wrap）的宽度：木框在下面会被设成和画布一样大，
+       若拿木框自己的宽度当预算就会越算越小（自我反馈）。 */
+    var wrap = dom.boardShell.parentElement || dom.boardShell;
+    var available = wrap.getBoundingClientRect().width || shellRect.width;
     if (available < 10) {            // 面板被隐藏（起始屏）时稍后重试
       setTimeout(scheduleLayout, 200);
       return;
@@ -278,16 +288,18 @@
        棋盘，笔记本视口（约 700~800px）就得滚动才能看到最下一排（实测踩过）。 */
     var hintH = dom.boardHint ? dom.boardHint.getBoundingClientRect().height : 18;
     var viewportH = window.innerHeight || document.documentElement.clientHeight || 720;
-    var availableH = Math.max(10 * 21, viewportH
-      - Math.max(shellRect.top, 0) - Math.max(hintH, 18) - 14);
+    var availableH = Math.max(10 * CELL_MIN, viewportH
+      - Math.max(shellRect.top, 0) - Math.max(hintH, 18) - 26);
 
     /* 画布尺寸先按“10 格宽”（8 格棋盘 + 左右各一格边距）估算，
        再用循环严格夹到容器宽度以内：宁可棋盘小半像素，也不能比容器宽，
        否则浏览器会缩放画布，点击就会偏格（曾经踩过的坑）。
-       格子大小取“宽度允许”和“高度允许”两者中的较小值，保证整盘一屏放得下。 */
-    var cell = clamp(Math.floor(Math.min(available / 10, availableH / 11) * 2) / 2, 21, 78);
+       格子大小取“宽度允许”和“高度允许”两者中的较小值，并受 CELL_MIN/CELL_MAX 约束。 */
+    var cell = clamp(
+      Math.floor(Math.min(available / 10, (availableH * VIEWPORT_FILL) / 11) * 2) / 2,
+      CELL_MIN, CELL_MAX);
     var margin = Math.max(26, Math.round(cell));
-    while (cell > 21 && cell * 8 + margin * 2 > available) {
+    while (cell > CELL_MIN && cell * 8 + margin * 2 > available) {
       cell -= 0.5;
       margin = Math.max(26, Math.round(cell));
     }
@@ -308,6 +320,10 @@
     }
     canvas.style.width = cssW + 'px';
     canvas.style.height = cssH + 'px';
+    /* 木框（外壳）紧贴画布：否则它会按 CSS 的 aspect-ratio 比画布更大，
+       底部露出一条空白木纹、并让画布被 overflow:hidden 裁掉几个像素。 */
+    dom.boardShell.style.width = cssW + 'px';
+    dom.boardShell.style.height = cssH + 'px';
     board.dpr = dpr;
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
