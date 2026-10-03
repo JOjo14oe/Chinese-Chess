@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# 部署时下载的第三方二进制（不属于本仓库代码，脚本会自动重新下载）
+tools/bin/
+tools/public-url.txt
+tools/*.log
+
+# 编辑器/系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
