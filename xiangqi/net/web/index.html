@@ -48,29 +48,66 @@
   <!-- ============================ 侧栏 ============================ -->
   <aside class="panel">
 
-    <!-- 起始屏：没有房间时显示 -->
+    <!-- 起始屏：没有房间时显示。同一个页面同时提供「单机」与「联机」两种模式 -->
     <section id="start" class="card card-start">
       <h2 class="card-title">开始对局</h2>
-      <p class="card-note">创建一个新房间，或输入 6 位房间号加入好友的棋局。</p>
 
-      <div class="field">
-        <label for="room-input">房间号</label>
-        <input id="room-input" class="room-input" type="text" inputmode="latin" autocomplete="off"
-               autocapitalize="characters" spellcheck="false" maxlength="6" placeholder="例如 A7K2QM">
+      <div class="mode-switch" role="tablist" aria-label="对局模式">
+        <button id="mode-offline" class="mode-btn is-on" type="button" role="tab">单机对局</button>
+        <button id="mode-online" class="mode-btn" type="button" role="tab">联机房间</button>
       </div>
+
+      <div id="start-offline" class="mode-pane">
+        <p class="card-note">单机模式<b>完全在这个页面里运行</b>：规则引擎与电脑对手都在浏览器内，不连服务器。</p>
+        <div class="field-row">
+          <label for="off-level">难度</label>
+          <select id="off-level" class="select">
+            <option value="easy">入门</option>
+            <option value="normal" selected>普通</option>
+            <option value="hard">困难</option>
+          </select>
+        </div>
+        <div class="field-row">
+          <label for="off-side">我执</label>
+          <select id="off-side" class="select">
+            <option value="r" selected>红方（先手）</option>
+            <option value="b">黑方（后手）</option>
+          </select>
+        </div>
+        <div class="field-row">
+          <label for="off-opponent">对手</label>
+          <select id="off-opponent" class="select">
+            <option value="ai" selected>电脑</option>
+            <option value="human">同屏双人</option>
+          </select>
+        </div>
+        <div class="btn-row">
+          <button id="btn-offline" class="btn btn-primary" type="button">开始单机对局</button>
+        </div>
+        <p class="card-note card-note-dim">同一套棋盘与记谱；想要和朋友联机，切到「联机房间」即可。</p>
+      </div>
+
+      <div id="start-online" class="mode-pane" hidden>
+        <p class="card-note">创建一个新房间，或输入 6 位房间号加入好友的棋局。</p>
+        <div class="field">
+          <label for="room-input">房间号</label>
+          <input id="room-input" class="room-input" type="text" inputmode="latin" autocomplete="off"
+                 autocapitalize="characters" spellcheck="false" maxlength="6" placeholder="例如 A7K2QM">
+        </div>
+        <div class="btn-row">
+          <button id="btn-create" class="btn btn-primary" type="button">创建房间</button>
+          <button id="btn-join" class="btn" type="button">加入房间</button>
+        </div>
+        <p class="card-note card-note-dim">房间号由 A–Z（不含 B、I、O）与 2–9 组成，双方各执红黑，服务器权威判定胜负。</p>
+      </div>
+
       <p id="start-error" class="alert alert-error" role="alert" hidden></p>
-
-      <div class="btn-row">
-        <button id="btn-create" class="btn btn-primary" type="button">创建房间</button>
-        <button id="btn-join" class="btn" type="button">加入房间</button>
-      </div>
-      <p class="card-note card-note-dim">房间号由 A–Z（不含 B、I、O）与 2–9 组成，双方各执红黑，服务器权威判定胜负。</p>
     </section>
 
     <!-- 对局面板：进入房间后显示 -->
     <section id="game" class="card card-game" hidden>
 
-      <div class="room-bar">
+      <div id="room-bar" class="room-bar">
         <div class="room-code-wrap">
           <span class="label">房间号</span>
           <b id="room-code" class="room-code">------</b>
@@ -114,6 +151,10 @@
           <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M13 8a5 5 0 1 1-1.6-3.7M13 2.4V5.6H9.8" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
           <span>新局</span>
         </button>
+        <button id="btn-undo" class="btn" type="button" hidden>
+          <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M6.6 3.4 3.4 6.6l3.2 3.2M3.6 6.6h5.2a3.6 3.6 0 0 1 0 7.2H6.4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>悔棋</span>
+        </button>
         <button id="btn-resign" class="btn btn-warn" type="button">
           <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.2 14V2.2M4.2 2.8h8.3L10.3 6l2.2 3.2H4.2" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
           <span>认输</span>
@@ -135,6 +176,7 @@
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 <script src="logic.js"></script>
+<script src="engine.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

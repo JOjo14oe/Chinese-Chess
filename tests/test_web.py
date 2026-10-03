@@ -21,7 +21,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WEB_DIR = os.path.join(ROOT, "xiangqi", "net", "web")
 NODE = shutil.which("node")
 
-REQUIRED_ASSETS = ("index.html", "app.js", "logic.js", "style.css")
+REQUIRED_ASSETS = ("index.html", "app.js", "logic.js", "engine.js", "style.css")
 
 
 def read(name):
@@ -104,6 +104,24 @@ class TestWebIntegration(unittest.TestCase):
         for kind in ("welcome", "events", "snapshot", "ack", "error"):
             self.assertIn("'%s'" % kind, self.app,
                           "app.js 未处理服务器消息类型：%s" % kind)
+
+    def test_unified_page_supports_offline_and_online(self):
+        """**同一个页面**必须同时具备单机（离线）与联机两种模式。"""
+        html = read("index.html")
+        for needle in ('id="mode-offline"', 'id="mode-online"', 'id="start-offline"',
+                       'id="start-online"', 'id="btn-offline"', 'id="btn-undo"',
+                       'src="engine.js"'):
+            self.assertIn(needle, html, "起始屏/脚本缺少：%s" % needle)
+        self.assertIn("XQEngine", self.app, "app.js 未使用浏览器内的离线引擎 XQEngine")
+        for needle in ("offlineStart", "offlineApply", "offlineMaybeAi", "offlineUndo",
+                       "offlineSync", "setStartMode", "offlineResign"):
+            self.assertIn(needle, self.app, "app.js 缺少离线模式实现：%s" % needle)
+        # 单机模式绝不能依赖服务器：离线分支里不允许出现网络请求
+        offline_block = self.app[self.app.index("function offlineStart"):]
+        offline_block = offline_block[:offline_block.index("第六节 · 网络")]
+        for needle in ("fetch(", "postJson(", "new WebSocket", "EventSource"):
+            self.assertNotIn(needle, offline_block,
+                             "单机模式里出现了网络调用：%s" % needle)
 
     def test_localstorage_keys(self):
         for key in ("xq.room", "xq.token", "xq.seq"):

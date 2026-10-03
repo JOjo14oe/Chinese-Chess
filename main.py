@@ -9,11 +9,14 @@
     python main.py --cli          # 命令行界面
     python main.py --cli --mode human --level hard
     python main.py --serve        # 联机对战服务器（开两个浏览器窗口对下）
+    python main.py --serve --tunnel        # 联机 + 自动拉起公网隧道（发链接给国外朋友）
+    python main.py --serve --tunnel --open # 同上，并自动打开浏览器
     python main.py --serve --host 0.0.0.0 --port 8000    # 允许跨国/局域网访问
     python main.py --selftest     # 自检（着法生成基准 + 规则检查），不进入游戏
 
-运行环境：Python 3.8+，仅标准库。单人模式（GUI/CLI）完全不联网；
-只有 ``--serve`` 会监听端口，供浏览器客户端连接。
+运行环境：Python 3.8+，仅标准库。网页前端是**同一个页面**：
+单机（人机/双人，纯浏览器内运行、不联网）与联机（房间对战）两种模式共用它。
+``--serve`` 只监听端口供浏览器连接；``--tunnel`` 才会去下载/运行 cloudflared。
 """
 
 import argparse
@@ -105,6 +108,12 @@ def main(argv=None):
     parser.add_argument("--gui", action="store_true", help="使用图形界面（默认）")
     parser.add_argument("--serve", action="store_true",
                         help="启动联机服务器（浏览器对战，可开两个窗口）")
+    parser.add_argument("--tunnel", action="store_true",
+                        help="联机 + 公网隧道：自动准备 cloudflared、拉起隧道并打印公网地址")
+    parser.add_argument("--open", action="store_true",
+                        help="配合 --tunnel：就绪后自动用默认浏览器打开页面")
+    parser.add_argument("--protocol", choices=["quic", "http2"], default=None,
+                        help="隧道协议（默认让 cloudflared 自己选；UDP 被封时用 http2）")
     parser.add_argument("--host", default=None,
                         help="联机服务器监听地址（默认 127.0.0.1，跨国对战用 0.0.0.0）")
     parser.add_argument("--port", type=int, default=None,
@@ -125,6 +134,11 @@ def main(argv=None):
 
     if args.selftest:
         return run_selftest(deep=args.deep)
+
+    if args.tunnel:
+        from xiangqi.net.tunnel import serve_public
+        return serve_public(host=args.host, port=args.port, verbose=args.verbose,
+                            open_browser=args.open, protocol=args.protocol)
 
     if args.serve:
         from xiangqi.net import protocol as net_protocol

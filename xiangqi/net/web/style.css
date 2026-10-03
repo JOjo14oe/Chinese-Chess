@@ -482,3 +482,60 @@ ul { list-style: none; padding: 0; }
   .layout { display: block; }
   .card { border-color: #999; box-shadow: none; }
 }
+
+/* ------------------------------------------------- 起始屏：单机 / 联机 切换 */
+.mode-switch {
+  display: flex;
+  gap: 6px;
+  margin: 2px 0 10px;
+  padding: 3px;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.mode-btn {
+  flex: 1;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.mode-btn:hover { color: var(--text); }
+
+.mode-btn.is-on {
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+.field-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 7px 0;
+}
+
+.field-row > label {
+  flex: none;
+  min-width: 2.6em;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+
+.select {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+}

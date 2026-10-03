@@ -132,6 +132,9 @@ class XiangqiApp(tk.Tk):
         button("提示", self._hint).pack(side=tk.LEFT, padx=2)
         button("认输", self._resign).pack(side=tk.LEFT, padx=2)
         button("翻转", self._flip).pack(side=tk.LEFT, padx=2)
+        tk.Button(top, text="联机对战", command=self._online, width=8,
+                  font=self.font_small, bg="#C8E6C9", activebackground="#A5D6A7",
+                  relief=tk.RAISED).pack(side=tk.LEFT, padx=(10, 2))
 
         tk.Label(top, text="模式", font=self.font_small, bg="#2F2A24",
                  fg="#F0E6D2").pack(side=tk.LEFT, padx=(14, 2))
@@ -551,8 +554,76 @@ class XiangqiApp(tk.Tk):
                 break
         self._refresh_status()
 
+    # ---------------------------------------------------------------- 联机
+    def _online(self):
+        """联机对战：后台自动开服务器 + Cloudflare 隧道，拿到公网地址后展示。
+
+        这样“本地离线版”也能一键变成联机版，而且前端仍是那一套网页页面：
+        同一个页面既能单机（人机/双人）也能联机（房间对战）。
+        """
+        session = getattr(self, "public_session", None)
+        if session is not None and session.url:
+            self._show_online_dialog(session.url)
+            return
+        # 只在真正要用联机时才导入（单机模式下 gui 不引入任何网络模块）
+        from xiangqi.net import protocol as net_protocol
+        from xiangqi.net.tunnel import PublicSession
+
+        self.serve_port = net_protocol.DEFAULT_PORT
+        self.status_var.set("正在启动联机服务与公网隧道…（首次会先下载 cloudflared）")
+
+        def ready(url):
+            self.after(0, lambda: self._show_online_dialog(url))
+
+        def failed(text):
+            self.after(0, lambda: messagebox.showerror("联机失败", text))
+
+        self.public_session = PublicSession(port=self.serve_port,
+                                            on_ready=ready, on_error=failed).start()
+
+    def _show_online_dialog(self, url):
+        public = url if url.endswith("/") else url + "/"
+        port = getattr(self, "serve_port", 8000)
+        self.status_var.set("联机对战已就绪：把公网地址发给朋友即可")
+        win = tk.Toplevel(self)
+        win.title("联机对战已就绪")
+        win.configure(bg="#2F2A24")
+        win.transient(self)
+        tk.Label(win, text="把这个公网地址发给朋友（他打开就能加入你的房间）：",
+                 font=self.font_small, bg="#2F2A24", fg="#F0E6D2",
+                 justify=tk.LEFT, anchor="w", wraplength=460).pack(padx=14, pady=(12, 6), anchor="w")
+        entry = tk.Entry(win, font=self.font_small, width=58)
+        entry.insert(0, public)
+        entry.configure(state="readonly")
+        entry.pack(padx=14, fill=tk.X)
+        row = tk.Frame(win, bg="#2F2A24")
+        row.pack(padx=14, pady=10, fill=tk.X)
+
+        def copy_link():
+            try:
+                self.clipboard_clear()
+                self.clipboard_append(public)
+                self.status_var.set("已复制公网地址")
+            except tk.TclError:                       # pragma: no cover - 剪贴板不可用
+                pass
+
+        def open_it():
+            from xiangqi.net.tunnel import open_page
+            open_page(public)
+
+        tk.Button(row, text="复制链接", font=self.font_small, command=copy_link).pack(side=tk.LEFT, padx=3)
+        tk.Button(row, text="打开浏览器", font=self.font_small, command=open_it).pack(side=tk.LEFT, padx=3)
+        tk.Button(row, text="关闭", font=self.font_small, command=win.destroy).pack(side=tk.RIGHT, padx=3)
+        tk.Label(win, text="本机也可以直接用 http://127.0.0.1:%d/ 开第二个窗口对下；"
+                           "关掉这个对话框不影响服务，退出程序时会自动收掉隧道。" % port,
+                 font=self.font_small, bg="#2F2A24", fg="#B0A795", wraplength=460,
+                 justify=tk.LEFT, anchor="w").pack(padx=14, pady=(0, 12), anchor="w")
+
     def _on_close(self):
         self._closing = True
+        session = getattr(self, "public_session", None)
+        if session is not None:
+            session.stop()                            # 关窗口时一并收掉隧道与服务器
         for handle in list(self._after_ids):
             try:
                 self.after_cancel(handle)

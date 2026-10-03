@@ -27,8 +27,10 @@
 | 命令行界面 | 文本棋盘、中文记谱提示、悔棋、提示、难度/模式切换、着法记录、存/读档（本地文本文件） |
 | 图形界面 | tkinter 绘制棋盘（楚河汉界、九宫斜线、兵炮位标记）、点击行棋、合法着法提示、悔棋、提示、认输、翻转、着法列表、FEN 复制 |
 | 联机对战 | 房间号入座、浏览器棋盘、WebSocket（SSE / 长轮询自动降级）、断线重连补发、幂等重发、认输/新局；为跨国高延迟链路设计（见 §10） |
+| 单机 / 联机合一 | **同一套网页前端**同时提供两种模式：单机（人机 / 同屏双人，规则引擎与 AI 全在浏览器内，直接双击 `xiangqi/net/web/index.html` 也能玩）与联机（房间对战，服务器权威判定） |
+| 一键联机 | 本地离线版直接开联机：`python main.py --serve --tunnel`，或图形界面点「联机对战」——自动准备并校验 cloudflared、拉起隧道、给出可发给朋友的公网地址 |
 | 公网/跨国部署 | 一键脚本 `tools\serve-public.cmd`：自动准备 cloudflared（校验 Cloudflare 签名）→ 启动本机服务 → 建立隧道 → 打印给国外朋友用的 https 地址；也支持局域网直连（见 §11 与 [docs/公网对战部署.md](<docs/公网对战部署.md>)） |
-| 测试 | 242 项测试（规则/记谱/引擎/命令行/图形界面/房间状态机/WebSocket/端到端/网页客户端/依赖边界/随机不变量），含公开 perft 基准比对 |
+| 测试 | 291 项测试（规则/记谱/引擎/命令行/图形界面/房间状态机/WebSocket/端到端/网页客户端/依赖边界/随机不变量），含公开 perft 基准比对 |
 
 ## 2. 运行环境与依赖（自包含说明）
 
@@ -52,7 +54,7 @@
 ```bat
 :: 克隆后三步
 python main.py --selftest      :: 1) 自检：perft 基准 + 规则 + 记谱 + 引擎（约 1 秒）
-python -m unittest discover -s tests -t .    :: 2) 242 项测试
+python -m unittest discover -s tests -t .    :: 2) 291 项测试
 python main.py                 :: 3) 玩：图形界面（对 AI）／--cli 命令行／--serve 浏览器对战
 ```
 
@@ -72,6 +74,8 @@ python main.py --level hard    :: 难度：easy / normal / hard / master
 python main.py --cli           :: 命令行界面
 python main.py --cli --mode human --level normal
 python main.py --serve         :: 联机服务器：开两个浏览器窗口对战（默认 127.0.0.1:8000）
+python main.py --serve --tunnel        :: 联机 + 自动拉起公网隧道，打印可发给朋友的 https 地址
+python main.py --serve --tunnel --open :: 同上，并自动打开浏览器
 python main.py --selftest      :: 自检：着法生成基准 + 规则检查，不进入游戏
 python main.py --selftest --deep   :: 自检并包含 perft(4)（约 40 秒）
 ```
@@ -152,10 +156,12 @@ xiangqi/
 │       ├── rooms.py        # 权威棋局状态机：座位、事件日志、幂等、重连
 │       ├── ws.py           # RFC 6455 WebSocket 服务端（手写帧编解码）
 │       ├── server.py       # http.server 路由：静态资源 / REST / SSE / WebSocket
+│       ├── tunnel.py       # 一键联机：自动准备 cloudflared + 拉起隧道 + 解析公网地址
 │       └── web/            # 浏览器客户端（零依赖、零构建、无外部资源）
 │           ├── index.html
 │           ├── app.js      # 画棋盘、点击行棋、三传输降级、重连
 │           ├── logic.js    # 纯逻辑（坐标、事件归并、可选中判断）便于测试
+│           ├── engine.js   # 浏览器内规则引擎 + 中文记谱 + 简易 AI（单机模式用，与 Python 逐条对拍）
 │           └── style.css
 ├── tools/                  # 部署工具（不属于业务代码）
 │   ├── serve-public.cmd    # Windows：双击即可（启动服务 + Cloudflare 隧道 + 打印公网地址）
@@ -411,6 +417,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\serve-public.ps1
 | `tests/test_net_server.py` | 29 | 真实 TCP 端到端：静态资源与健康检查、开房/入座/满员、轮次与非法着法、幂等与过期、令牌校验、认输/新局、`/resume` 契约、长轮询被唤醒与 `wait` 容错、SSE 推送与 `Last-Event-ID` 重连、JSON 错误体、WebSocket 双人对局与重连 |
 | `tests/test_web.py` | 10 | HTML 元素 id 与 app.js 引用一一对应、只用 logic.js 导出的符号、接口与协议字段齐全、无内联事件处理器与外部资源；有 `node` 时另做 `node --check` 与 18 项纯逻辑断言（坐标换算、事件归并幂等/乱序容错、快照应用、`canSelect`、`legalFrom`、ICCS 四字符校验） |
 | `tests/test_offline.py` | 9 | 核心模块离线、联机层仅标准库、网页零外部资源、`--serve` 入口不会在导入时监听端口 |
+| `tests/test_web_engine.py` | 30 | 浏览器内引擎 vs Python 逐条对拍：perft(1-3)、中文记谱（平/进/退、前后叠子）、合法性边界（蹩马腿/塞象眼/牵制/照面）、将死/困毙/三次重复/60 回合、AI 合法性；含两个真实踩坑的回归 |
+| `tests/test_tunnel.py` | 13 | 一键联机（不联网）：公网地址解析、cloudflared 查找/复用、假 cloudflared 进程编排、入口与图形界面接线 |
 
 另外用一个**独立的 Node 脚本**验证了网页端纯逻辑模块 `logic.js`（坐标换算、棋子名、
 `applyEvents` 幂等与乱序容错、`applySnapshot`、`canSelect`、`legalFrom`），21 项断言全部通过。

@@ -170,6 +170,8 @@
 
   var state = {
     app: null,             // 当前 XQ 状态（服务器快照 + 事件）
+    mode: 'online',        // 'online'（房间对战）或 'offline'（单机，浏览器内引擎）
+    offline: null,         // 单机模式下的本地对局数据（见 offlineStart）
     room: '',
     token: '',
     mySide: '',
@@ -568,6 +570,10 @@
   /* ====================================================================== */
 
   function myTurn() {
+    if (state.mode === 'offline') {
+      /* 单机：轮到“我这方”才可选子；同屏双人模式下 mySide 会跟着走子方走 */
+      return !!state.app && !XQ.isOver(state.app) && state.app.side === state.mySide;
+    }
     return XQ.isMyTurn(state.app, state.mySide);
   }
 
@@ -695,11 +701,28 @@
   }
 
   function renderSeats() {
-    var mine = state.mySide || 'r';
-    var other = XQ.other(mine) || 'b';
-    dom.seatTopSide = other;
-    paintSeat(dom.seatTop, other, state.mySide ? '对手' : '黑方', false);
-    paintSeat(dom.seatSelf, mine, state.mySide ? '你' : '红方', !!state.mySide);
+    if (state.mode === 'offline') {
+      var off = state.offline || {};
+      var mine = off.mySide === 'b' ? 'b' : 'r';
+      var other = mine === 'r' ? 'b' : 'r';
+      dom.seatTopSide = other;
+      var top = dom.seatTop;
+      top.className = 'seat seat-on';
+      top.querySelector('.seat-side').textContent = XQ.sideName(other);
+      top.querySelector('.seat-name').textContent = off.twoPlayer
+        ? '同屏对手' : ('电脑（' + offlineLevelLabel(off.level) + '）');
+      top.querySelector('.seat-tag').textContent = '对手';
+      dom.seatSelf.className = 'seat seat-self seat-on';
+      dom.seatSelf.querySelector('.seat-side').textContent = XQ.sideName(mine);
+      dom.seatSelf.querySelector('.seat-name').textContent = '你（' + XQ.sideName(mine) + '）';
+      dom.seatSelf.querySelector('.seat-tag').textContent = '你';
+      return;
+    }
+    var mineSide = state.mySide || 'r';
+    var otherSide = XQ.other(mineSide) || 'b';
+    dom.seatTopSide = otherSide;
+    paintSeat(dom.seatTop, otherSide, state.mySide ? '对手' : '黑方', false);
+    paintSeat(dom.seatSelf, mineSide, state.mySide ? '你' : '红方', !!state.mySide);
   }
 
   function renderStatus() {
@@ -708,6 +731,27 @@
     var line = dom.statusLine;
     var text = '';
     var cls = 'status-line';
+
+    /* 单机模式：状态只讲“谁该走、电脑在想什么”，与联机共用同一块状态栏 */
+    if (state.mode === 'offline') {
+      var off = state.offline || {};
+      if (api && api.result) {
+        text = api.result.text || '对局结束';
+        cls += ' is-over';
+      } else if (off.twoPlayer) {
+        text = '同屏双人 · 轮到' + XQ.sideName(api.side) + '走棋';
+        if (XQ.isCheckOn(api, api.side)) { text += ' · 将军！'; cls += ' is-check'; }
+      } else if (myTurn()) {
+        text = '单机 · 电脑（' + offlineLevelLabel(off.level) + '） · 轮到你走棋';
+        if (XQ.isCheckOn(api, state.mySide)) { text += ' · 将军！'; cls += ' is-check'; }
+      } else {
+        text = '单机 · 电脑（' + offlineLevelLabel(off.level) + '）思考中…';
+      }
+      line.textContent = text;
+      line.className = cls;
+      dom.boardHint.textContent = '点击自己的棋子选中，再点绿点落子；点空白处取消。';
+      return;
+    }
 
     if (phase === 'over' && api.result) {
       text = api.result.text || '对局结束';
@@ -815,6 +859,15 @@
     if (state.conn.phase === 'live') label = '已连接 · ' + mode;
     else if (state.conn.phase === 'connecting' && mode) label = '连接中 · ' + mode;
     else if (state.conn.phase === 'retry' && mode) label = '重连中 · ' + mode;
+    if (state.mode === 'offline') {
+      /* 单机模式没有网络连接，徽标直接说明“在浏览器内运行” */
+      dom.connText.textContent = '单机 · 浏览器内运行';
+      dom.conn.className = 'conn conn-live';
+      var localSeq = state.app ? state.app.seq : 0;
+      dom.metaSeq.textContent = '记谱序号：' + XQ.formatSeq(localSeq) + '（单机）';
+      dom.metaSide.textContent = state.mySide ? ('你执' + XQ.sideName(state.mySide)) : '单机';
+      return;
+    }
     dom.connText.textContent = label;
     var cls = 'conn';
     if (state.conn.phase === 'live') cls += ' conn-live';
@@ -831,12 +884,15 @@
   function renderButtons() {
     var api = state.app;
     var over = XQ.isOver(api);
-    var hasRoom = !!state.room;
+    var offline = state.mode === 'offline';
+    var hasRoom = offline ? !!state.offline : !!state.room;
     var spectating = !state.mySide;
 
     dom.btnNew.disabled = !hasRoom || spectating;
     dom.btnResign.disabled = !hasRoom || spectating || over;
-    dom.btnCopy.disabled = !hasRoom;
+    dom.btnCopy.disabled = offline || !hasRoom;
+    dom.btnUndo.hidden = !offline;
+    dom.btnUndo.disabled = !offline || over || !(state.offline && state.offline.moves.length);
   }
 
   function render() {
@@ -853,7 +909,7 @@
       state.lastRenderFlipped = state.flipped;
       state.lastRenderSelected = state.selected ? XQ.squareName(state.selected.rank, state.selected.file) : '';
     }
-    dom.roomCode.textContent = state.room || '------';
+    dom.roomCode.textContent = state.mode === 'offline' ? '单机' : (state.room || '------');
     renderStatus();
     renderSeats();
     renderResult();
@@ -932,6 +988,193 @@
       }
       render();
     }
+  }
+
+  /* ====================================================================== */
+  /* 第五节·二 · 单机（离线）模式                                            */
+  /*                                                                        */
+  /* 同一个页面同时服务两种模式：联机时状态来自服务器快照；单机时这里用      */
+  /* XQEngine 在浏览器内充当“本机服务器”，把每一步整理成与服务器快照同形的   */
+  /* 对象再交给 XQ.applySnapshot —— 于是棋盘、标记、记谱、结果全部复用同一套 */
+  /* 渲染代码，离线与联机表现一致。                                          */
+  /* ====================================================================== */
+
+  var OFFLINE_ROOM = 'OFFLINE';
+  var OFFLINE_LEVEL_NAMES = { easy: '入门', normal: '普通', hard: '困难' };
+
+  function offlineEngine() {
+    return (typeof XQEngine !== 'undefined') ? XQEngine : null;
+  }
+
+  function offlineLevelLabel(level) {
+    return OFFLINE_LEVEL_NAMES[level] || '普通';
+  }
+
+  function offlineFen() {
+    var off = state.offline;
+    return off.fens[off.fens.length - 1];
+  }
+
+  /** 用本地引擎的结果重建一份“服务器快照同形”的状态，然后走同一套渲染。 */
+  function offlineSync() {
+    var engine = offlineEngine();
+    var off = state.offline;
+    if (!engine || !off) return;
+    var fen = offlineFen();
+    var info = engine.status(fen, off.fens);
+    off.side = info.side;
+    off.check = info.check;
+    off.result = info.result || null;
+    if (off.twoPlayer) state.mySide = info.side;   // 同屏双人：谁走谁的可选
+
+    state.app = XQ.applySnapshot(null, {
+      v: 1,
+      room: OFFLINE_ROOM,
+      seq: off.moves.length,
+      game_seq: off.moves.length,
+      fen: fen,
+      side: info.side,
+      turn_name: XQ.sideName(info.side),
+      check: !!info.check && !info.result,
+      legal: engine.legalMap(fen),
+      seats: { r: { joined: true, connected: true, name: '' },
+               b: { joined: true, connected: true, name: '' } },
+      moves: off.moves.slice(),
+      last_move: off.lastMove,
+      result: off.result,
+      result_text: off.result ? off.result.text : ''
+    });
+    render();
+  }
+
+  function offlineStart(level, mySide, twoPlayer) {
+    var engine = offlineEngine();
+    if (!engine) {
+      toast('离线引擎未加载（engine.js 缺失）', 'error');
+      return;
+    }
+    disconnect();                          // 单机不与服务器保持任何连接
+    state.mode = 'offline';
+    state.room = '';
+    state.token = '';
+    state.pending = null;
+    state.mySide = mySide;
+    state.flipped = (mySide === 'b');
+    state.selected = null;
+    state.targets = [];
+    state.offline = {
+      level: level,
+      mySide: mySide,
+      twoPlayer: !!twoPlayer,
+      fens: [engine.START_FEN],
+      moves: [],
+      lastMove: null,
+      result: null,
+      check: false,
+      side: 'r',
+      thinking: false
+    };
+    dom.start.hidden = true;
+    dom.game.hidden = false;
+    dom.roomBar.hidden = true;
+    if (dom.btnLeave.querySelector('span')) dom.btnLeave.querySelector('span').textContent = '退出对局';
+    offlineSync();
+    toast(twoPlayer ? '同屏双人对局开始（红先）'
+                    : '单机对局开始：电脑（' + offlineLevelLabel(level) + '）',
+          'ok');
+    offlineMaybeAi();
+  }
+
+  function offlineLeave() {
+    state.mode = 'online';
+    state.offline = null;
+    state.app = null;
+    state.mySide = '';
+    state.selected = null;
+    state.targets = [];
+    dom.game.hidden = true;
+    dom.start.hidden = false;
+    dom.roomBar.hidden = false;
+    if (dom.btnLeave.querySelector('span')) dom.btnLeave.querySelector('span').textContent = '退出房间';
+    setConn('idle', 'none');
+    render();
+  }
+
+  function offlineApply(iccs) {
+    var engine = offlineEngine();
+    var off = state.offline;
+    if (!engine || !off || off.result) return false;
+    var applied = engine.applyMove(offlineFen(), iccs);
+    if (!applied || applied.ok !== true) {
+      toast('这一步不合法', 'error');
+      return false;
+    }
+    off.fens.push(applied.fen);
+    off.moves.push({
+      seq: off.moves.length + 1,
+      side: XQ.pieceSide(applied.piece),
+      iccs: iccs,
+      chinese: applied.chinese,
+      from: applied.from,
+      to: applied.to
+    });
+    off.lastMove = { from: applied.from, to: applied.to };
+    off.result = null;
+    state.selected = null;
+    state.targets = [];
+    offlineSync();
+    offlineMaybeAi();
+    return true;
+  }
+
+  /** 电脑该走就走上一步（放在 setTimeout 里，先把玩家这一步画出来）。 */
+  function offlineMaybeAi() {
+    var off = state.offline;
+    if (!off || off.twoPlayer || off.result || off.thinking) return;
+    if (off.side === off.mySide) return;
+    off.thinking = true;
+    var level = off.level;
+    setTimeout(function () {
+      var current = state.offline;
+      if (!current || state.mode !== 'offline' || current !== off) return;
+      off.thinking = false;
+      if (off.result || off.side === off.mySide) return;
+      var iccs = offlineEngine().bestMove(offlineFen(), level);
+      if (!iccs) { offlineSync(); return; }
+      offlineApply(iccs);
+    }, 220);
+  }
+
+  function offlineUndo() {
+    var off = state.offline;
+    if (!off || off.result || !off.moves.length) return;
+    var plies = 1;
+    if (!off.twoPlayer && off.side === off.mySide && off.moves.length >= 2) {
+      plies = 2;                           // 连对手那步一起退，退完仍轮到我
+    }
+    for (var i = 0; i < plies && off.moves.length; i += 1) {
+      off.fens.pop();
+      off.moves.pop();
+    }
+    var last = off.moves.length ? off.moves[off.moves.length - 1] : null;
+    off.lastMove = last ? { from: last.from, to: last.to } : null;
+    off.result = null;
+    state.selected = null;
+    state.targets = [];
+    offlineSync();
+  }
+
+  function offlineResign() {
+    var off = state.offline;
+    if (!off || off.result) return;
+    var loser = off.twoPlayer ? off.side : off.mySide;
+    var winner = loser === 'r' ? 'b' : 'r';
+    off.result = {
+      kind: 'resign',
+      winner: winner,
+      text: XQ.sideName(winner) + '胜（' + XQ.sideName(loser) + '认输）'
+    };
+    offlineSync();
   }
 
   /* ====================================================================== */
@@ -1237,6 +1480,11 @@
    * base_seq = 当前已知局面序号（乐观并发），cid = 幂等键。
    */
   function sendMove(iccs, from, to) {
+    if (state.mode === 'offline') {
+      if (!myTurn()) { toast('现在不该你走棋', 'error'); return; }
+      offlineApply(iccs);
+      return;
+    }
     if (!state.app || !state.room) return;
     if (!myTurn()) { toast('现在不该你走棋', 'error'); return; }
     if (state.pending) { toast('上一手还在等待服务器确认…', 'error'); return; }
@@ -1495,6 +1743,25 @@
     dom.btnFlip = $('btn-flip');
     dom.metaSeq = $('meta-seq');
     dom.metaSide = $('meta-side');
+    dom.roomBar = $('room-bar');
+    dom.modeOffline = $('mode-offline');
+    dom.modeOnline = $('mode-online');
+    dom.startOffline = $('start-offline');
+    dom.startOnline = $('start-online');
+    dom.offLevel = $('off-level');
+    dom.offSide = $('off-side');
+    dom.offOpponent = $('off-opponent');
+    dom.btnOffline = $('btn-offline');
+    dom.btnUndo = $('btn-undo');
+  }
+
+  /** 起始屏上的「单机 / 联机」切换。 */
+  function setStartMode(mode) {
+    var offline = mode !== 'online';
+    dom.startOffline.hidden = !offline;
+    dom.startOnline.hidden = offline;
+    dom.modeOffline.className = 'mode-btn' + (offline ? ' is-on' : '');
+    dom.modeOnline.className = 'mode-btn' + (offline ? '' : ' is-on');
   }
 
   function bindEvents() {
@@ -1530,13 +1797,31 @@
     });
 
     dom.btnCopy.addEventListener('click', function () { copyRoomLink(); });
-    dom.btnNew.addEventListener('click', function () { postAction('/new', '开新局'); });
+    dom.btnNew.addEventListener('click', function () {
+      if (state.mode === 'offline' && state.offline) {
+        offlineStart(state.offline.level, state.offline.mySide, state.offline.twoPlayer);
+        return;
+      }
+      postAction('/new', '开新局');
+    });
     dom.btnResign.addEventListener('click', function () {
       if (XQ.isOver(state.app)) return;
       if (globalThis.confirm && !globalThis.confirm('确定认输吗？本局将判负。')) return;
+      if (state.mode === 'offline') { offlineResign(); return; }
       postAction('/resign', '认输');
     });
-    dom.btnLeave.addEventListener('click', function () { leaveRoom(); });
+    dom.btnLeave.addEventListener('click', function () {
+      if (state.mode === 'offline') { offlineLeave(); return; }
+      leaveRoom();
+    });
+    dom.btnUndo.addEventListener('click', function () { offlineUndo(); });
+
+    /* 起始屏：单机/联机切换 + 开始单机对局 */
+    dom.modeOffline.addEventListener('click', function () { setStartMode('offline'); });
+    dom.modeOnline.addEventListener('click', function () { setStartMode('online'); });
+    dom.btnOffline.addEventListener('click', function () {
+      offlineStart(dom.offLevel.value, dom.offSide.value, dom.offOpponent.value === 'human');
+    });
     dom.btnFlip.addEventListener('click', function () { flipBoard(); });
     dom.overlayFlip.addEventListener('click', function () { flipBoard(); });
 
@@ -1564,11 +1849,27 @@
     bindEvents();
     setupCanvas();
 
+    /* 直接双击打开 index.html（file://）时，默认进入单机模式：
+       这条路完全不需要服务器，页面内的 XQEngine 就是全部“后端”。 */
+    var localFile = (typeof location !== 'undefined' && location.protocol === 'file:');
+    setStartMode(localFile ? 'offline' : 'online');
+
     var params = null;
     try { params = new URL(location.href).searchParams; } catch (error) { params = null; }
     var fromUrl = params ? XQ.normalizeRoom(params.get('room') || '') : '';
     var stored = XQ.normalizeRoom(store.get(storageKeys.room) || '');
     var code = XQ.isValidRoom(fromUrl) ? fromUrl : (XQ.isValidRoom(stored) ? stored : '');
+    if (localFile) code = '';            // 本地文件模式不做任何联机恢复
+
+    /* ?offline=1 直接开一局单机（可带 &level=normal&side=b&vs=human），
+       不需要任何服务器；自动化测试也用它。 */
+    if (params && params.get('offline')) {
+      var level = OFFLINE_LEVEL_NAMES[params.get('level')] ? params.get('level') : 'normal';
+      var side = params.get('side') === 'b' ? 'b' : 'r';
+      render();
+      offlineStart(level, side, params.get('vs') === 'human');
+      return;
+    }
 
     render();
 
