@@ -1,0 +1,20 @@
+# 统一换行符，避免不同平台检出错乱：
+#  * Windows 上的 git（core.autocrlf=true）会把文本文件检出成 CRLF，那样 tools/serve-public.sh
+#    在 bash/WSL 里会报 "\r: command not found"（Windows CI 上实测踩到，已由测试守护）。
+#  * 批处理与 PowerShell 脚本则希望保持 Windows 习惯的 CRLF。
+* text=auto eol=lf
+
+*.sh  text eol=lf
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+# 二进制/资源文件不做换行转换
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.exe binary
+*.zip binary
