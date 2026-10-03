@@ -1,5 +1,9 @@
 # 中国象棋 · 本地实现（Xiangqi）
 
+[![CI](https://github.com/JOjo14oe/Chinese-Chess/actions/workflows/ci.yml/badge.svg)](https://github.com/JOjo14oe/Chinese-Chess/actions/workflows/ci.yml)
+![Python](https://img.shields.io/badge/Python-3.9%2B-blue)
+![License](https://img.shields.io/badge/License-MIT-green)
+
 一个用 **纯 Python 标准库** 实现的中国象棋（象棋）程序：完整的行棋规则引擎、
 中文记谱、本地 AI 引擎、命令行 + 图形（tkinter）两套界面，以及**同一台机器上开两个
 浏览器窗口对战**的联机服务器（也可放到公网跨国对弈）。
