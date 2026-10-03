@@ -96,7 +96,7 @@ HORSE_LEG = _pos("1n3k3/1P7/9/9/9/9/9/9/9/3K5")
 BLACK_PIECES = _pos("3k5/9/9/9/9/2n6/2p6/9/4N4/3K5", side="b")
 #: 双车叠在同一条纵线（中文记谱的 前/后）；红帅在 d0、黑将在 e9，两车都不被牵制
 STACKED_ROOKS = _pos("4k4/9/9/9/9/R8/9/9/9/R2K5")
-#: 同上但两车在 a3/a4，红帅在 c0：a3 车可以直接退三格（后车退三）
+#: 同上但两车在 a3/a2，红帅在 c0：a2 的后车可以直接退回底线（后车退一/后车退二）
 STACKED_ROOKS_LOW = _pos("4k4/9/9/9/9/9/R8/R8/9/2K6")
 #: 两条纵线上各有两个兵（前/后 称谓冲突时需附纵线号）
 STACKED_PAWNS = _pos("3k5/9/9/9/9/9/9/9/2P1P4/2P1P1K2")
@@ -334,8 +334,8 @@ class TestWebEngineNotation(unittest.TestCase):
         self.assertTrue(any("退" in text for text in texts), "缺少 退")
         self.assertTrue(any(text[0] in "前后" for text in texts), "缺少 前/后 叠子")
         for want in ("炮二平五", "马二进三", "车九进一", "马8进7", "炮2平5",
-                     "前车进一", "后车进一", "后车平七", "前兵七进一",
-                     "前兵五进一"):
+                     "前车进一", "后车进一", "前车退一", "后车退一", "后车平七",
+                     "前兵七进一", "前兵五进一"):
             self.assertIn(want, texts, "缺少经典记谱：%s" % want)
         # 叠兵的“数字/前后”称谓（具体是 五兵 还是 前兵，取决于哪个兵能合法横走）
         self.assertTrue(any(text[0] in "前后二三四五" and "兵" in text for text in texts),
